@@ -9,7 +9,8 @@ import {
   Maximize2,
   ShieldCheck,
   Info,
-  Briefcase
+  Briefcase,
+  UserCircle
 } from 'lucide-react';
 import { AppTab } from '../types';
 
@@ -26,6 +27,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
     { id: AppTab.DRAFTS, label: 'Legal Drafting', icon: PenTool },
     { id: AppTab.ADVOCATE_TOOLS, label: 'Advocate Tools', icon: Briefcase },
     { id: AppTab.RESOURCES, label: 'Law Library', icon: Library },
+    { id: AppTab.PROFILE, label: 'My Profile', icon: UserCircle },
   ];
 
   return (

@@ -9,6 +9,24 @@ export enum UserType {
   CITIZEN = 'citizen'
 }
 
+export enum Language {
+  ENGLISH = 'English',
+  HINDI = 'Hindi',
+  KANNADA = 'Kannada',
+  MALAYALAM = 'Malayalam',
+  TAMIL = 'Tamil',
+  BENGALI = 'Bengali',
+  MARATHI = 'Marathi'
+}
+
+export enum Jurisdiction {
+  UNION = 'Union of India',
+  MAHARASHTRA = 'Maharashtra',
+  DELHI = 'Delhi',
+  TAMIL_NADU = 'Tamil Nadu',
+  KARNATAKA = 'Karnataka'
+}
+
 export interface UserProfile {
   id: string;
   identifier: string; // email
@@ -16,6 +34,10 @@ export interface UserProfile {
   name?: string;
   userType: UserType;
   barId?: string;
+  preferences?: {
+    language: Language;
+    jurisdiction: Jurisdiction;
+  };
 }
 
 export interface Message {
@@ -25,6 +47,7 @@ export interface Message {
   timestamp: Date;
   attachments?: string[];
   groundingLinks?: { title: string; uri: string }[];
+  reasoning?: string; // For Explainable AI (XAI)
 }
 
 export enum AppTab {
@@ -33,7 +56,8 @@ export enum AppTab {
   MY_DOCUMENTS = 'my_documents',
   DRAFTS = 'drafts',
   RESOURCES = 'resources',
-  ADVOCATE_TOOLS = 'advocate_tools'
+  ADVOCATE_TOOLS = 'advocate_tools',
+  PROFILE = 'profile'
 }
 
 export interface UserDocument {
