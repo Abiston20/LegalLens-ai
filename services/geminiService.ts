@@ -5,29 +5,28 @@ import { Role, Language, Jurisdiction } from "../types";
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const SYSTEM_INSTRUCTION = `
-You are NyayaAI, a specialized Multilingual & Multi-jurisdictional Legal Assistant.
-Your expertise includes:
-- CRIMINAL: IPC (BNS), CrPC (BNSS), Evidence Act.
-- CIVIL: CPC, Property Law, Contract Act, Family Law.
-- COMMERCIAL: Companies Act, GST, IBC, IPR, Arbitration.
-- JURISDICTION: Focus on Union of India and specific State-level variations.
+You are LegalLens, an expert AI Legal Co-pilot specialized in the Indian Legal System and Multilingual assistance.
 
-EXPLAINABLE AI (XAI) PROTOCOL:
-When answering complex queries, provide a 'Reasoning Path' section that details:
-1. The specific statutes identified.
-2. The logic used to connect the facts to the law.
-3. Precedents or logical deductions applied.
+YOUR CAPABILITIES:
+1. INTELLIGENT DOCUMENT ANALYSIS: When provided with a document (PDF, Image, DOCX text), you MUST perform "Issue Extraction" and "Automatic Summarization".
+2. CASE LAW INTEGRATION: Map legal facts to specific sections of Indian Law, including:
+   - Bharatiya Nyaya Sanhita (BNS) / Indian Penal Code (IPC)
+   - Bharatiya Nagarik Suraksha Sanhita (BNSS) / CrPC
+   - Bharatiya Sakshya Adhiniyam (BSA) / Evidence Act
+   - Civil Procedure Code (CPC), Contracts Act, Family Laws, etc.
+3. MULTILINGUAL SUPPORT: You support English, Hindi, Kannada, Malayalam, Tamil, Bengali, and Marathi. You must respond in the user's preferred language while keeping legal citations in English for jurisdictional accuracy.
 
-MULTILINGUAL SUPPORT:
-Respond in the language requested by the user. Maintain legal citations in English for precision.
+OUTPUT PROTOCOL FOR DOCUMENTS:
+You must ALWAYS return a structured analysis containing:
+- Executive Summary: A concise 2-3 sentence overview.
+- Identified Legal Issues: Numbered list of primary points of law at play.
+- Crucial Dates: All dates mentioned, with context (e.g., Incident Date, Notice Date).
+- Relevant Parties: List of individuals/entities and their roles (e.g., Petitioner, Respondent).
+- Statutory Mapping: Direct citations of sections from IPC/BNS/CPC etc.
+- Recommendations: Next legal steps.
 
-DOCUMENT ANALYSIS PROTOCOL:
-When analyzing documents, you MUST extract:
-- Executive Summary: A concise overview.
-- Key Legal Issues: Specific points of contention or legal questions.
-- Crucial Dates: Any deadlines, incident dates, or filing dates.
-- Involved Parties: Identification of all entities/individuals.
-- Statutory Mapping: Specific sections of Indian Law (IPC/BNS, etc.) that apply.
+EXPLAINABLE AI (XAI):
+For every complex legal advice, include a reasoning section that explains why specific laws apply to the given facts.
 `;
 
 export const chatWithLegalAI = async (
@@ -38,15 +37,15 @@ export const chatWithLegalAI = async (
 ) => {
   const prompt = `
 Context:
-- Preferred Language: ${language}
-- Target Jurisdiction: ${jurisdiction}
+- User Language: ${language}
+- Jurisdiction: ${jurisdiction}
 
 Query: ${message}
 
 Instructions:
-1. Answer the query comprehensively in ${language}.
-2. Cite relevant sections from Indian Law (Civil, Commercial, or Criminal).
-3. Provide an EXPLICIT section at the end titled "---REASONING_PATH---" explaining the legal logic used for Explainable AI transparency.
+1. Provide a detailed legal answer in ${language}.
+2. Use Google Search to ground your answer in recent case law or amendments (2024-2025).
+3. Include an "---REASONING_PATH---" section at the end.
 `;
 
   const response = await ai.models.generateContent({
@@ -70,7 +69,7 @@ Instructions:
     reasoning: reasoning?.trim(),
     links: response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
       web: {
-        title: chunk.web?.title || 'Legal Resource',
+        title: chunk.web?.title || 'Legal Reference',
         uri: chunk.web?.uri || '#'
       }
     })) || []
@@ -84,7 +83,7 @@ export const analyzeLegalDocument = async (base64Data: string, mimeType: string)
       {
         parts: [
           { inlineData: { data: base64Data, mimeType } },
-          { text: "Perform a comprehensive intelligent analysis of this legal document. Extract and categorize: \n1. Executive Summary\n2. Key Legal Issues Identified\n3. Crucial Dates and Deadlines\n4. Relevant Parties Involved\n5. Statutory Mapping (IPC/BNS/CPC etc.)\n6. Risk Assessment\nReturn the results in clear, structured Markdown with distinct headings." }
+          { text: "Perform an Intelligent Document Analysis. Extract the Executive Summary, Key Issues, Dates, Parties, and Statutory Mapping (IPC/BNS citations). Return a structured Markdown report." }
         ]
       }
     ],
@@ -98,7 +97,7 @@ export const analyzeLegalDocument = async (base64Data: string, mimeType: string)
 export const generateDraft = async (type: string, details: string) => {
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
-    contents: `Draft a professional ${type} based on these details: ${details}. Ensure it follows standard Indian legal formatting for Civil/Commercial matters as appropriate.`,
+    contents: `Draft a professional ${type} based on these details: ${details}. Follow Indian legal drafting standards.`,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION
     }

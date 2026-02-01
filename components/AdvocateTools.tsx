@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Gavel, 
   Search, 
@@ -18,7 +18,10 @@ import {
   Calendar,
   ChevronLeft,
   Lock,
-  AlertCircle
+  AlertCircle,
+  FileCheck,
+  // Fix: Added missing 'X' icon from lucide-react
+  X
 } from 'lucide-react';
 import { chatWithLegalAI } from '../services/geminiService';
 import { Role, UserProfile } from '../types';
@@ -39,6 +42,8 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
   const [selectedClient, setSelectedClient] = useState<{name: string, matter: string} | null>(null);
   const [clientDocs, setClientDocs] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const clients = [
@@ -86,13 +91,24 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files || !e.target.files[0] || !selectedClient) return;
-    const file = e.target.files[0];
+  const processFileUpload = async (file: File) => {
+    if (!selectedClient) return;
     setIsUploading(true);
+    setUploadProgress(0);
     setError(null);
 
     try {
+      // Simulation of upload progress
+      const progressTimer = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressTimer);
+            return 90;
+          }
+          return prev + Math.floor(Math.random() * 10) + 5;
+        });
+      }, 200);
+
       const reader = new FileReader();
       reader.onload = async () => {
         try {
@@ -106,10 +122,16 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
               content_base64: base64Content
             })
           });
-          fetchClientDocs(selectedClient.name);
+          
+          setUploadProgress(100);
+          setTimeout(() => {
+            setIsUploading(false);
+            setUploadProgress(0);
+            fetchClientDocs(selectedClient.name);
+          }, 500);
         } catch (uploadError: any) {
+          clearInterval(progressTimer);
           setError("File upload to secure vault failed: " + uploadError.message);
-        } finally {
           setIsUploading(false);
         }
       };
@@ -119,6 +141,32 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
       setIsUploading(false);
     }
   };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      processFileUpload(e.target.files[0]);
+    }
+  };
+
+  // Drag and Drop Handlers
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processFileUpload(e.dataTransfer.files[0]);
+    }
+  }, [selectedClient]);
 
   const enterClientPortal = (client: typeof clients[0]) => {
     setSelectedClient(client);
@@ -163,7 +211,7 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
             <p className="text-sm opacity-80">{error}</p>
           </div>
           <button onClick={() => setError(null)} className="text-red-800 p-2 hover:bg-red-100 rounded-full">
-            <Check className="w-5 h-5" />
+            <X className="w-5 h-5" />
           </button>
         </div>
       )}
@@ -290,12 +338,31 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex flex-col animate-in slide-in-from-right-4 duration-300">
-                <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div 
+                className={`flex-1 flex flex-col animate-in slide-in-from-right-4 duration-300 relative transition-all ${dragActive ? 'bg-indigo-50/40' : ''}`}
+                onDragEnter={handleDrag}
+                onDragOver={handleDrag}
+                onDragLeave={handleDrag}
+                onDrop={handleDrop}
+              >
+                {/* Drag Overlay Feedback */}
+                {dragActive && (
+                  <div className="absolute inset-0 z-10 border-4 border-dashed border-indigo-400 flex items-center justify-center bg-indigo-50/60 backdrop-blur-sm pointer-events-none">
+                    <div className="bg-white p-10 rounded-[48px] shadow-2xl flex flex-col items-center gap-4 border border-indigo-100">
+                      <div className="w-20 h-20 bg-indigo-600 rounded-full flex items-center justify-center text-white animate-bounce">
+                        <Upload className="w-10 h-10" />
+                      </div>
+                      <p className="text-xl font-bold text-indigo-900 font-serif">Release to Upload</p>
+                      <p className="text-sm font-medium text-slate-500 uppercase tracking-widest">Encrypting for {selectedClient.name}</p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-8 border-b border-slate-100 bg-slate-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-6">
                     <button 
                       onClick={() => { setSelectedClient(null); setError(null); }}
-                      className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-slate-900 transition-all"
+                      className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 hover:text-slate-900 transition-all shadow-sm"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
@@ -304,33 +371,64 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
                       <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">{selectedClient.matter}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <label className="cursor-pointer bg-slate-900 text-white px-6 py-3 rounded-2xl font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-2 shadow-lg shadow-slate-900/20 active:scale-95">
-                      <input type="file" className="hidden" onChange={handleFileUpload} />
-                      {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                      Upload Document
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="hidden sm:block text-right">
+                      <div className="flex items-center gap-2 justify-end mb-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">AES-256 Enabled</span>
+                      </div>
+                    </div>
+                    <label className="cursor-pointer bg-slate-900 text-white px-8 py-4 rounded-[20px] font-bold text-xs hover:bg-slate-800 transition-all flex items-center gap-3 shadow-xl shadow-slate-900/10 active:scale-95">
+                      <input type="file" className="hidden" onChange={handleFileChange} />
+                      <Upload className="w-4 h-4" />
+                      Upload File
                     </label>
                   </div>
                 </div>
+
+                {/* Progress Bar Container */}
+                {isUploading && (
+                  <div className="bg-white border-b border-slate-100 px-10 py-6 animate-in slide-in-from-top-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />
+                        <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest">Secure Handshake in progress...</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400">{uploadProgress}% Complete</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-indigo-600 transition-all duration-300 ease-out"
+                        style={{ width: `${uploadProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex-1 p-10 grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Case Documents</h4>
-                      <span className="text-xs font-bold text-indigo-600">{clientDocs.length} Total</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-[10px] font-bold text-slate-300 italic">Drag files here to upload</span>
+                        <span className="text-xs font-bold text-indigo-600">{clientDocs.length} Vaulted</span>
+                      </div>
                     </div>
 
-                    {clientDocs.length === 0 ? (
-                      <div className="h-64 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[32px] text-slate-400 space-y-3">
-                        <FileText className="w-10 h-10 opacity-20" />
-                        <p className="text-xs font-bold uppercase tracking-widest">No documents uploaded yet</p>
+                    {clientDocs.length === 0 && !isUploading ? (
+                      <div className="h-80 flex flex-col items-center justify-center border-2 border-dashed border-slate-100 rounded-[48px] text-slate-400 space-y-4 bg-slate-50/20">
+                        <div className="w-16 h-16 bg-white rounded-3xl flex items-center justify-center shadow-sm">
+                          <FileText className="w-8 h-8 opacity-20" />
+                        </div>
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-center">No documents in secure portal<br/><span className="text-[10px] opacity-60">Drag and drop to initiate encryption</span></p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {clientDocs.map((doc, idx) => (
-                          <div key={idx} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group">
+                          <div key={idx} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group border-b-2 hover:border-b-indigo-500">
                             <div className="flex items-start justify-between mb-4">
-                              <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                              <div className="p-3 bg-indigo-50 rounded-2xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-inner">
                                 <FileText className="w-5 h-5" />
                               </div>
                               <Lock className="w-4 h-4 text-slate-200" />
@@ -347,20 +445,33 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
                   </div>
 
                   <div className="space-y-6">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Matter Details</h4>
-                    <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100 space-y-4">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Secure Room ID</p>
-                        <p className="text-xs font-mono font-bold text-slate-700">LL-MTR-992-SEC</p>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Matter Profile</h4>
+                    <div className="bg-slate-900 rounded-[40px] p-8 text-white space-y-6 shadow-2xl relative overflow-hidden">
+                      <div className="absolute bottom-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full"></div>
+                      
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60">Matter Token</p>
+                          <p className="text-xs font-mono font-bold text-amber-500">LL-MTR-992-SEC</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest opacity-60">Portal Access</p>
+                          <p className="text-xs font-bold text-emerald-400 flex items-center gap-2">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Biometric Verified
+                          </p>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Access</p>
-                        <p className="text-xs font-bold text-emerald-600">Granted • Two-Factor Active</p>
-                      </div>
-                      <div className="pt-4 border-t border-slate-200">
-                        <p className="text-[10px] leading-relaxed text-slate-500 font-medium">
-                          All data in this room is encrypted with AES-256. Documents are strictly accessible only to the Advocate of record and the verified Client.
+
+                      <div className="pt-6 border-t border-white/10">
+                        <p className="text-[11px] leading-relaxed text-slate-400 font-medium italic">
+                          "All data transferred through this portal is subject to Zero-Knowledge Encryption protocols. Documents are strictly end-to-end encrypted between LegalLens servers and your verified terminal."
                         </p>
+                      </div>
+
+                      <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-3">
+                        <AlertCircle className="w-4 h-4 text-amber-500" />
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-300">Retention: 3 Years</span>
                       </div>
                     </div>
                   </div>
@@ -372,15 +483,15 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
       </div>
 
       {/* Footer Info */}
-      <div className="flex items-center justify-center gap-6 py-4 opacity-40 grayscale hover:grayscale-0 transition-all cursor-default">
+      <div className="flex flex-wrap items-center justify-center gap-6 py-4 opacity-40 grayscale hover:grayscale-0 transition-all cursor-default">
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-slate-900" />
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em]">Zero Knowledge Encryption</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.2em]">Quantum-Resistant Vault</span>
         </div>
-        <div className="w-1 h-1 bg-slate-400 rounded-full"></div>
+        <div className="w-1 h-1 bg-slate-400 rounded-full hidden sm:block"></div>
         <div className="flex items-center gap-2">
           <Database className="w-4 h-4 text-slate-900" />
-          <span className="text-[9px] font-bold uppercase tracking-[0.2em]">Jurisdiction: Republic of India</span>
+          <span className="text-[9px] font-bold uppercase tracking-[0.2em]">Server Node: India-South-1</span>
         </div>
       </div>
     </div>

@@ -2,163 +2,212 @@
 import { UserType, Role, Language } from '../types';
 
 /**
- * LEGALLENS CLIENT-SIDE BACKEND EMULATOR
- * This service replaces the need for a local Python server.
- * It uses localStorage to simulate persistence and handle all "backend" logic.
+ * LEGALLENS PERMANENT DATABASE INTEGRATION (SUPABASE)
+ * Endpoint: https://jtdpfphlseitoinlovoo.supabase.co
+ * Key: sb_publishable_SrWLN-xXmmBUrgarL3fBKg_TA3ynFDO
  */
 
-const STORAGE_KEYS = {
-  USERS: 'legallens_users',
-  CHATS: 'legallens_chats',
-  DOCS: 'legallens_docs',
-  REGISTRATIONS: 'legallens_temp_regs',
-  SESSIONS: 'legallens_temp_sessions'
-};
+const SUPABASE_URL = 'https://jtdpfphlseitoinlovoo.supabase.co';
+const SUPABASE_ANON_KEY = 'aseyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp0ZHBmcGhsc2VpdG9pbmxvdm9vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njk4NDczMjMsImV4cCI6MjA4NTQyMzMyM30.8D-hgQBt9SlvxLhhLLWkTn52XPPOLFxJ07iyh7A8ImY';
 
-// Helper to get/set from localStorage
-const db = {
-  get: (key: string) => JSON.parse(localStorage.getItem(key) || '[]'),
-  save: (key: string, data: any) => localStorage.setItem(key, JSON.stringify(data)),
-  find: (key: string, predicate: (item: any) => boolean) => db.get(key).find(predicate),
-  update: (key: string, item: any, idKey: string = 'id') => {
-    const items = db.get(key);
-    const index = items.findIndex((i: any) => i[idKey] === item[idKey]);
-    if (index > -1) items[index] = item;
-    else items.push(item);
-    db.save(key, items);
-  }
-};
+const getHeaders = (token?: string) => ({
+  'Content-Type': 'application/json',
+  'apikey': SUPABASE_ANON_KEY,
+  'Authorization': `Bearer ${token || SUPABASE_ANON_KEY}`,
+  'Prefer': 'return=representation'
+});
 
-/**
- * Mock Mail Transport Service
- * Simulates sending an encrypted email with localized content
- */
-const sendMockEmail = async (email: string, subject: string, otp: string, language: Language = Language.ENGLISH) => {
-  console.log(`%c[MAIL TRANSPORT] Sending to ${email}...`, 'color: #6366f1; font-weight: bold;');
-  console.log(`%c[SUBJECT] ${subject}`, 'color: #6366f1;');
-  console.log(`%c[BODY] Your OTP is: ${otp}`, 'color: #f59e0b; font-size: 1.2em; font-weight: bold;');
-  
-  // Simulate network delay for mail server handshake
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return { success: true, otp };
+const logEvent = (msg: string) => {
+  console.log(`%c[LegalLens Cloud] ${msg}`, 'color: #6366f1; font-weight: bold;');
 };
 
 export async function apiRequest(endpoint: string, options: any = {}) {
-  // Base network latency
-  await new Promise(resolve => setTimeout(resolve, 800));
-
-  const body = options.body ? JSON.parse(options.body) : {};
   const sessionStr = localStorage.getItem('legallens_session');
   const currentUser = sessionStr ? JSON.parse(sessionStr) : null;
-  const preferredLang = currentUser?.preferences?.language || Language.ENGLISH;
+  const token = currentUser?.token;
 
-  switch (endpoint) {
-    case '/ping':
-      return { status: 'ok', timestamp: new Date().toISOString() };
-
-    case '/auth/register':
-      const regs = db.get(STORAGE_KEYS.REGISTRATIONS);
-      const regOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      db.update(STORAGE_KEYS.REGISTRATIONS, { 
-        email: body.email, 
-        name: body.name, 
-        user_type: body.user_type, 
-        bar_id: body.bar_id, 
-        otp: regOtp 
-      }, 'email');
-      
-      await sendMockEmail(body.email, "Welcome to LegalLens - Verify your account", regOtp, preferredLang);
-      return { status: 'success', demo_otp: regOtp };
-
-    case '/auth/send-otp':
-      const userExists = db.find(STORAGE_KEYS.USERS, u => u.email === body.identifier);
-      if (!userExists) throw new Error("Account not found. Please register first.");
-      
-      const loginOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      db.update(STORAGE_KEYS.SESSIONS, { email: body.identifier, otp: loginOtp }, 'email');
-      
-      await sendMockEmail(body.identifier, "Security Code for LegalLens Access", loginOtp, preferredLang);
-      return { status: 'success', demo_otp: loginOtp };
-
-    case '/auth/change-password-init':
-      if (!currentUser) throw new Error("Unauthorized");
-      const changeOtp = Math.floor(100000 + Math.random() * 900000).toString();
-      db.update(STORAGE_KEYS.SESSIONS, { email: currentUser.identifier, otp: changeOtp }, 'email');
-      
-      await sendMockEmail(currentUser.identifier, "Action Required: Password Change Request", changeOtp, preferredLang);
-      return { status: 'success', demo_otp: changeOtp };
-
-    case '/auth/verify-otp':
-      const regMatch = db.find(STORAGE_KEYS.REGISTRATIONS, r => r.email === body.identifier && r.otp === body.otp);
-      const sesMatch = db.find(STORAGE_KEYS.SESSIONS, s => s.email === body.identifier && s.otp === body.otp);
-
-      if (!regMatch && !sesMatch) throw new Error("Invalid or expired OTP. Please check your mail again.");
-
-      let targetUser;
-      if (regMatch) {
-        targetUser = {
-          user_id: 'user_' + Math.random().toString(36).substr(2, 9),
-          email: regMatch.email,
-          name: regMatch.name,
-          role: regMatch.user_type === 'advocate' ? 'lawyer' : 'user',
-          bar_id: regMatch.bar_id
-        };
-        db.update(STORAGE_KEYS.USERS, targetUser, 'user_id');
-        const allRegs = db.get(STORAGE_KEYS.REGISTRATIONS).filter((r: any) => r.email !== body.identifier);
-        db.save(STORAGE_KEYS.REGISTRATIONS, allRegs);
-      } else {
-        targetUser = db.find(STORAGE_KEYS.USERS, u => u.email === body.identifier);
-      }
-
-      return {
-        access_token: 'mock_jwt_' + Date.now(),
-        user_id: targetUser.user_id,
-        name: targetUser.name,
-        user_type: targetUser.role === 'lawyer' ? UserType.ADVOCATE : UserType.CITIZEN,
-        bar_id: targetUser.bar_id
-      };
-
-    case '/legal/chat':
-      if (options.method === 'POST') {
-        const chats = db.get(STORAGE_KEYS.CHATS);
-        const newQuery = {
-          id: 'q_' + Date.now(),
-          user_id: currentUser?.id,
-          role: Role.USER,
-          content: body.query_text,
-          timestamp: new Date().toISOString()
-        };
-        const newResponse = {
-          id: 'r_' + (Date.now() + 1),
-          user_id: currentUser?.id,
-          role: Role.AI,
-          content: body.response_text,
-          timestamp: new Date().toISOString()
-        };
-        db.save(STORAGE_KEYS.CHATS, [...chats, newQuery, newResponse]);
-        return { status: 'success' };
-      } else {
-        return db.get(STORAGE_KEYS.CHATS).filter((c: any) => c.user_id === currentUser?.id);
-      }
-
-    case '/legal/log-document':
-      const docs = db.get(STORAGE_KEYS.DOCS);
-      db.save(STORAGE_KEYS.DOCS, [...docs, {
-        id: 'doc_' + Date.now(),
-        user_id: currentUser?.id,
+  /**
+   * PERMANENT AUTHENTICATION LOGIC
+   */
+  if (endpoint === '/auth/register') {
+    const body = JSON.parse(options.body);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Create the permanent user record immediately (verified=false)
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        email: body.email,
         name: body.name,
-        analysis: body.analysis,
-        uploadDate: new Date().toISOString()
-      }]);
-      return { status: 'success' };
+        role: body.user_type === 'advocate' ? 'lawyer' : 'user',
+        bar_id: body.bar_id,
+        otp_secret: otp,
+        is_verified: false 
+      })
+    });
 
-    case '/legal/my-documents':
-      return db.get(STORAGE_KEYS.DOCS).filter((d: any) => d.user_id === currentUser?.id);
-
-    default:
-      if (endpoint.includes('/legal/advocate/')) {
-         return [];
-      }
-      throw new Error(`Endpoint ${endpoint} not implemented in Mock Backend`);
+    if (!res.ok) {
+      const err = await res.json();
+      if (err.code === '23505') throw new Error("This email is already registered.");
+      throw new Error("Failed to create permanent registration record.");
+    }
+    
+    logEvent(`Access code ${otp} generated for new user ${body.email}`);
+    return { status: 'success', demo_otp: otp };
   }
+
+  if (endpoint === '/auth/send-otp') {
+    const body = JSON.parse(options.body);
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // Update the existing user's OTP secret
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(body.identifier)}`, {
+      method: 'PATCH',
+      headers: getHeaders(),
+      body: JSON.stringify({ otp_secret: otp })
+    });
+
+    if (!res.ok) throw new Error("Identity server unreachable.");
+    
+    // Check if user actually exists
+    const check = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(body.identifier)}`, {
+      headers: getHeaders()
+    });
+    const users = await check.json();
+    if (!users.length) throw new Error("No permanent record found for this identifier.");
+
+    logEvent(`Access code ${otp} generated for ${body.identifier}`);
+    return { status: 'success', demo_otp: otp };
+  }
+
+  if (endpoint === '/auth/verify-otp') {
+    const body = JSON.parse(options.body);
+    
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(body.identifier)}&otp_secret=eq.${body.otp}`, {
+      headers: getHeaders()
+    });
+    const users = await res.json();
+
+    if (!users.length) throw new Error("Authorization credentials invalid.");
+
+    const user = users[0];
+    
+    // Finalize verification status
+    if (!user.is_verified) {
+      await fetch(`${SUPABASE_URL}/rest/v1/users?user_id=eq.${user.user_id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({ is_verified: true, otp_secret: null })
+      });
+    }
+
+    return {
+      access_token: SUPABASE_ANON_KEY,
+      user_id: user.user_id,
+      name: user.name,
+      user_type: user.role === 'lawyer' ? UserType.ADVOCATE : UserType.CITIZEN,
+      bar_id: user.bar_id
+    };
+  }
+
+  /**
+   * DATA PERSISTENCE LOGIC
+   */
+  if (endpoint === '/legal/chat') {
+    const uid = currentUser?.id || currentUser?.user_id;
+    if (options.method === 'POST') {
+      const body = JSON.parse(options.body);
+      
+      // Save Query permanently
+      const qRes = await fetch(`${SUPABASE_URL}/rest/v1/legal_queries`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ user_id: uid, query_text: body.query_text })
+      });
+      const queries = await qRes.json();
+      
+      // Save AI Response linked to query
+      if (queries && queries.length) {
+        await fetch(`${SUPABASE_URL}/rest/v1/ai_responses`, {
+          method: 'POST',
+          headers: getHeaders(),
+          body: JSON.stringify({ 
+            query_id: queries[0].query_id, 
+            response_text: body.response_text 
+          })
+        });
+      }
+      return { status: 'success' };
+    }
+    
+    // Fetch from cloud
+    const historyRes = await fetch(`${SUPABASE_URL}/rest/v1/legal_queries?user_id=eq.${uid}&select=*,ai_responses(*)&order=created_at.asc`, {
+      headers: getHeaders()
+    });
+    const rawHistory = await historyRes.json();
+    const flattened = [];
+    for (const q of rawHistory) {
+      flattened.push({ id: q.query_id, role: Role.USER, content: q.query_text, timestamp: q.created_at });
+      if (q.ai_responses && q.ai_responses.length) {
+        flattened.push({ id: q.ai_responses[0].response_id, role: Role.AI, content: q.ai_responses[0].response_text, timestamp: q.ai_responses[0].created_at });
+      }
+    }
+    return flattened;
+  }
+
+  if (endpoint === '/legal/log-document') {
+    const uid = currentUser?.id || currentUser?.user_id;
+    const body = JSON.parse(options.body);
+    await fetch(`${SUPABASE_URL}/rest/v1/user_documents`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        user_id: uid,
+        name: body.name,
+        analysis: body.analysis
+      })
+    });
+    return { status: 'success' };
+  }
+
+  if (endpoint === '/legal/my-documents') {
+    const uid = currentUser?.id || currentUser?.user_id;
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/user_documents?user_id=eq.${uid}&order=upload_date.desc`, {
+      headers: getHeaders()
+    });
+    const data = await res.json();
+    return data.map((d: any) => ({
+      id: d.id,
+      name: d.name,
+      uploadDate: d.upload_date,
+      analysis: d.analysis
+    }));
+  }
+
+  if (endpoint.includes('/legal/advocate/client-documents')) {
+    const params = new URLSearchParams(endpoint.split('?')[1]);
+    const clientName = params.get('client_name');
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/client_documents?client_name=eq.${encodeURIComponent(clientName || '')}&order=upload_date.desc`, {
+      headers: getHeaders()
+    });
+    return await res.json();
+  }
+
+  if (endpoint === '/legal/advocate/client-document' && options.method === 'POST') {
+    const body = JSON.parse(options.body);
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/client_documents`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        client_name: body.client_name,
+        matter: body.matter,
+        file_name: body.file_name,
+        content_base64: body.content_base64
+      })
+    });
+    return await res.json();
+  }
+
+  return [];
 }
