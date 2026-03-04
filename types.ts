@@ -29,11 +29,13 @@ export enum Jurisdiction {
 
 export interface UserProfile {
   id: string;
+  user_id?: string;
   identifier: string; // email
   token: string;
   name?: string;
   userType: UserType;
   barId?: string;
+  photoUrl?: string; // Added for profile photo support
   preferences?: {
     language: Language;
     jurisdiction: Jurisdiction;
@@ -47,7 +49,8 @@ export interface Message {
   timestamp: Date;
   attachments?: string[];
   groundingLinks?: { title: string; uri: string }[];
-  reasoning?: string; // For Explainable AI (XAI)
+  youtubeLinks?: { title: string; url: string }[];
+  reasoning?: string;
 }
 
 export enum AppTab {
@@ -65,6 +68,13 @@ export interface UserDocument {
   name: string;
   uploadDate: string;
   analysis: string;
+}
+
+export interface LegalDraft {
+  id: string;
+  type: string;
+  content: string;
+  timestamp: string;
 }
 
 export interface LegalAnalysis {

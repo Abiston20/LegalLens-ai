@@ -83,7 +83,8 @@ const AdvocateTools: React.FC<AdvocateToolsProps> = ({ user }) => {
   const fetchClientDocs = async (clientName: string) => {
     setError(null);
     try {
-      const data = await apiRequest(`/legal/advocate/client-documents?client_name=${encodeURIComponent(clientName)}`);
+      // Cast result to any[] to fix type assignment error
+      const data = await apiRequest(`/legal/advocate/client-documents?client_name=${encodeURIComponent(clientName)}`) as any[];
       setClientDocs(data);
     } catch (e: any) {
       console.error("Failed to fetch client docs", e);

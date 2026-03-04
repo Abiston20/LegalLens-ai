@@ -1,6 +1,6 @@
 {
   "name": "LEGALLENS - AI Legal Assistant",
-  "description": "Professional AI-powered legal co-pilot for the Indian legal system. Features secure OTP authentication, document analysis, and legal drafting.",
+  "description": "Professional AI-powered legal co-pilot for the Indian legal system. Features Secure Local Vault architecture, document analysis, and jurisdictional legal drafting. No external databases; all data stays on your device.",
   "requestFramePermissions": [
     "microphone"
   ]
