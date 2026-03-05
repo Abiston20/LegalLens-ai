@@ -8,6 +8,9 @@ import cors from "cors";
 import nodemailer from "nodemailer";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,13 +24,16 @@ const transporter = nodemailer.createTransport({
   port: parseInt(process.env.SMTP_PORT || "587"),
   secure: false, // true for 465, false for other ports
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: process.env.SMTP_USER || process.env.EMAIL_USER,
+    pass: process.env.SMTP_PASS || process.env.EMAIL_PASS,
   },
 });
 
 async function sendOTPEmail(email: string, otp: string) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+
+  if (!user || !pass) {
     console.log("------------------------------------------");
     console.log(`REAL-TIME SIMULATION: OTP for ${email} is ${otp}`);
     console.log("To send real emails, configure SMTP_USER and SMTP_PASS in .env");
@@ -36,7 +42,7 @@ async function sendOTPEmail(email: string, otp: string) {
   }
 
   const mailOptions = {
-    from: `"LegalLens Security" <${process.env.SMTP_USER}>`,
+    from: `"LegalLens Security" <${user}>`,
     to: email,
     subject: "Your LegalLens Access Code",
     text: `Your OTP is ${otp}. Valid for 5 minutes.`,
@@ -238,8 +244,11 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`SMTP_USER: ${process.env.SMTP_USER ? "SET" : "NOT SET"}`);
-    console.log(`SMTP_PASS: ${process.env.SMTP_PASS ? "SET" : "NOT SET"}`);
+    const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+    console.log(`SMTP_USER: ${user ? "SET" : "NOT SET"}`);
+    console.log(`SMTP_PASS: ${pass ? "SET" : "NOT SET"}`);
+    console.log(`GEMINI_API_KEY: ${process.env.API_KEY ? "SET" : "NOT SET"}`);
   });
 }
 

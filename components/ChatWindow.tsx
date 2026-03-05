@@ -54,11 +54,26 @@ const ChatWindow: React.FC = () => {
     try {
       const history = await apiRequest('/legal/chat') as any;
       if (history && history.length > 0) {
-        setMessages(history.map((m: any) => ({
-          ...m,
-          role: m.role as Role,
-          timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
-        })));
+        const transformedMessages: Message[] = [];
+        history.forEach((item: any) => {
+          if (item.query_text) {
+            transformedMessages.push({
+              id: item.id + '_q',
+              role: Role.USER,
+              content: item.query_text,
+              timestamp: new Date(item.timestamp || Date.now())
+            });
+          }
+          if (item.response_text) {
+            transformedMessages.push({
+              id: item.id + '_r',
+              role: Role.AI,
+              content: item.response_text,
+              timestamp: new Date(item.timestamp || Date.now())
+            });
+          }
+        });
+        setMessages(transformedMessages);
       } else if (messages.length === 0) {
         setMessages([{
           id: 'welcome',
@@ -146,7 +161,8 @@ const ChatWindow: React.FC = () => {
     setMessages(prev => [...prev, initialAiMessage]);
 
     try {
-      const currentHistory = [...messages, userMessage].map(m => ({ role: m.role, content: m.content }));
+      // History should only contain PREVIOUS messages, not the current userMessage
+      const currentHistory = messages.map(m => ({ role: m.role, content: m.content }));
       
       const response = await chatWithLegalAIStream(
         text, 
